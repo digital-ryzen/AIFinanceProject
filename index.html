@@ -28,7 +28,7 @@
             <p id="loadingMsg" class="text-yellow-400 mt-4 hidden animate-pulse">Fetching live data & AI analysis...</p>
         </div>
 
-        <!-- Results Card (Expanded to 6 metrics) -->
+        <!-- Results Card -->
         <div id="resultsCard" class="hidden bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700">
             <h2 class="text-2xl font-bold mb-4" id="resTicker">TICKER</h2>
             <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
@@ -70,12 +70,13 @@
                 <div class="space-x-4">
                     <button onclick="toggleHistory()" id="toggleBtn" class="text-sm text-gray-400 hover:text-white transition-colors">Hide History</button>
                     <button onclick="loadDatabase()" class="text-sm text-blue-400 hover:text-blue-300">Refresh History</button>
+                    <!-- Added Clear History Button -->
+                    <button onclick="clearHistory()" class="text-sm text-red-400 hover:text-red-300">Clear History</button>
                 </div>
             </div>
             <div id="historyTableContainer" class="overflow-x-auto">
                 <table class="w-full text-left">
                     <thead>
-                        <!-- Added 4 new column headers -->
                         <tr class="border-b border-gray-700 text-gray-400">
                             <th class="py-2">Ticker</th>
                             <th class="py-2">Price</th>
@@ -95,6 +96,13 @@
     </div>
 
     <script>
+        // 1. Generate or retrieve the unique session ID
+        let sessionId = sessionStorage.getItem("session_id");
+        if (!sessionId) {
+            sessionId = crypto.randomUUID();
+            sessionStorage.setItem("session_id", sessionId);
+        }
+
         async function analyzeStock() {
             const tickerInput = document.getElementById('tickerInput');
             const ticker = tickerInput.value.trim().toUpperCase();
@@ -104,7 +112,8 @@
             document.getElementById('resultsCard').classList.add('hidden');
 
             try {
-                const response = await fetch(`/analyze/${ticker}`);
+                // 2. Pass session_id to backend as a query parameter
+                const response = await fetch(`/analyze/${ticker}?session_id=${sessionId}`);
                 const data = await response.json();
 
                 if (data.error_details) {
@@ -113,7 +122,6 @@
                     return;
                 }
 
-                // Update all 6 metrics on the screen
                 document.getElementById('resTicker').innerText = data.ticker;
                 document.getElementById('resPrice').innerText = data.price;
                 document.getElementById('resMargin').innerText = data.profit_margin;
@@ -135,7 +143,8 @@
         }
 
         async function loadDatabase() {
-            const response = await fetch('/database');
+            // 3. Pass session_id to the database endpoint
+            const response = await fetch(`/database?session_id=${sessionId}`);
             const data = await response.json();
 
             const tbody = document.getElementById('dbTableBody');
@@ -146,7 +155,6 @@
             data.saved_records.reverse().forEach(row => {
                 const tr = document.createElement('tr');
                 tr.className = "border-b border-gray-800 hover:bg-gray-700 transition-colors";
-                // Injecting the 8 points of data into the 8 columns
                 tr.innerHTML = `
                     <td class="py-3 font-semibold text-blue-400">${row[1]}</td>
                     <td class="py-3">${row[2]}</td>
@@ -172,6 +180,14 @@
                 tableContainer.classList.add('hidden');
                 btn.innerText = "Show History";
             }
+        }
+
+        // 4. Function to wipe the local ID and start a clean session
+        function clearHistory() {
+            sessionStorage.removeItem("session_id");
+            sessionId = crypto.randomUUID();
+            sessionStorage.setItem("session_id", sessionId);
+            loadDatabase();
         }
 
         loadDatabase();
