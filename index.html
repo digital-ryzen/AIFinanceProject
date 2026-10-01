@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Financial Analyst</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-white font-sans min-h-screen p-8">
+
+    <div class="max-w-5xl mx-auto space-y-8">
+        <!-- Header -->
+        <div class="text-center">
+            <h1 class="text-4xl font-bold text-blue-400 mb-2">AI Financial Analyst</h1>
+            <p class="text-gray-400">Powered by Gemini & Yahoo Finance</p>
+        </div>
+
+        <!-- Search Box -->
+        <div class="bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700">
+            <div class="flex gap-4">
+                <input type="text" id="tickerInput" placeholder="Enter Stock Ticker (e.g., AAPL)"
+                       class="flex-1 bg-gray-900 text-white px-4 py-3 rounded-lg border border-gray-600 focus:outline-none focus:border-blue-500 uppercase">
+                <button onclick="analyzeStock()"
+                        class="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3 rounded-lg font-semibold transition-colors">
+                    Analyze
+                </button>
+            </div>
+            <p id="loadingMsg" class="text-yellow-400 mt-4 hidden animate-pulse">Fetching live data & AI analysis...</p>
+        </div>
+
+        <!-- Results Card (Expanded to 6 metrics) -->
+        <div id="resultsCard" class="hidden bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700">
+            <h2 class="text-2xl font-bold mb-4" id="resTicker">TICKER</h2>
+            <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+                <div class="bg-gray-900 p-4 rounded-lg">
+                    <p class="text-gray-400 text-sm">Current Price</p>
+                    <p class="text-xl font-semibold text-green-400" id="resPrice">$0.00</p>
+                </div>
+                <div class="bg-gray-900 p-4 rounded-lg">
+                    <p class="text-gray-400 text-sm">Profit Margin</p>
+                    <p class="text-xl font-semibold text-blue-400" id="resMargin">0.00%</p>
+                </div>
+                <div class="bg-gray-900 p-4 rounded-lg">
+                    <p class="text-gray-400 text-sm">Quarterly Revenue</p>
+                    <p class="text-xl font-semibold text-purple-400" id="resQRev">N/A</p>
+                </div>
+                <div class="bg-gray-900 p-4 rounded-lg">
+                    <p class="text-gray-400 text-sm">Yearly Revenue</p>
+                    <p class="text-xl font-semibold text-purple-400" id="resYRev">N/A</p>
+                </div>
+                <div class="bg-gray-900 p-4 rounded-lg">
+                    <p class="text-gray-400 text-sm">Quarterly EPS</p>
+                    <p class="text-xl font-semibold text-yellow-400" id="resQEPS">N/A</p>
+                </div>
+                <div class="bg-gray-900 p-4 rounded-lg">
+                    <p class="text-gray-400 text-sm">Yearly EPS</p>
+                    <p class="text-xl font-semibold text-yellow-400" id="resYEPS">N/A</p>
+                </div>
+            </div>
+            <div class="bg-gray-900 p-4 rounded-lg border-l-4 border-blue-500">
+                <p class="text-gray-400 text-sm mb-2">AI Conclusion</p>
+                <p class="text-gray-200 leading-relaxed" id="resAI">Analysis goes here...</p>
+            </div>
+        </div>
+
+       <!-- Database History -->
+        <div class="bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold">Database History</h2>
+                <div class="space-x-4">
+                    <button onclick="toggleHistory()" id="toggleBtn" class="text-sm text-gray-400 hover:text-white transition-colors">Hide History</button>
+                    <button onclick="loadDatabase()" class="text-sm text-blue-400 hover:text-blue-300">Refresh History</button>
+                </div>
+            </div>
+            <div id="historyTableContainer" class="overflow-x-auto">
+                <table class="w-full text-left">
+                    <thead>
+                        <!-- Added 4 new column headers -->
+                        <tr class="border-b border-gray-700 text-gray-400">
+                            <th class="py-2">Ticker</th>
+                            <th class="py-2">Price</th>
+                            <th class="py-2">Margin</th>
+                            <th class="py-2">Q-Rev</th>
+                            <th class="py-2">Y-Rev</th>
+                            <th class="py-2">Q-EPS</th>
+                            <th class="py-2">Y-EPS</th>
+                            <th class="py-2">AI Analysis</th>
+                        </tr>
+                    </thead>
+                    <tbody id="dbTableBody" class="text-sm">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function analyzeStock() {
+            const tickerInput = document.getElementById('tickerInput');
+            const ticker = tickerInput.value.trim().toUpperCase();
+            if (!ticker) return;
+
+            document.getElementById('loadingMsg').classList.remove('hidden');
+            document.getElementById('resultsCard').classList.add('hidden');
+
+            try {
+                const response = await fetch(`/analyze/${ticker}`);
+                const data = await response.json();
+
+                if (data.error_details) {
+                    alert(data.status + "\n\n" + data.error_details);
+                    document.getElementById('loadingMsg').classList.add('hidden');
+                    return;
+                }
+
+                // Update all 6 metrics on the screen
+                document.getElementById('resTicker').innerText = data.ticker;
+                document.getElementById('resPrice').innerText = data.price;
+                document.getElementById('resMargin').innerText = data.profit_margin;
+                document.getElementById('resQRev').innerText = data.q_rev;
+                document.getElementById('resYRev').innerText = data.y_rev;
+                document.getElementById('resQEPS').innerText = data.q_eps;
+                document.getElementById('resYEPS').innerText = data.y_eps;
+                document.getElementById('resAI').innerText = data.ai_response;
+
+                document.getElementById('loadingMsg').classList.add('hidden');
+                document.getElementById('resultsCard').classList.remove('hidden');
+
+                loadDatabase();
+            } catch (error) {
+                console.error("Fetch failed:", error);
+                alert("Error connecting to server. Make sure Uvicorn is running.");
+                document.getElementById('loadingMsg').classList.add('hidden');
+            }
+        }
+
+        async function loadDatabase() {
+            const response = await fetch('/database');
+            const data = await response.json();
+
+            const tbody = document.getElementById('dbTableBody');
+            tbody.innerHTML = "";
+
+            if (!data.saved_records) return;
+
+            data.saved_records.reverse().forEach(row => {
+                const tr = document.createElement('tr');
+                tr.className = "border-b border-gray-800 hover:bg-gray-700 transition-colors";
+                // Injecting the 8 points of data into the 8 columns
+                tr.innerHTML = `
+                    <td class="py-3 font-semibold text-blue-400">${row[1]}</td>
+                    <td class="py-3">${row[2]}</td>
+                    <td class="py-3">${row[3]}</td>
+                    <td class="py-3">${row[4]}</td>
+                    <td class="py-3">${row[5]}</td>
+                    <td class="py-3">${row[6]}</td>
+                    <td class="py-3">${row[7]}</td>
+                    <td class="py-3 text-gray-400 line-clamp-2">${row[8]}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function toggleHistory() {
+            const tableContainer = document.getElementById('historyTableContainer');
+            const btn = document.getElementById('toggleBtn');
+
+            if (tableContainer.classList.contains('hidden')) {
+                tableContainer.classList.remove('hidden');
+                btn.innerText = "Hide History";
+            } else {
+                tableContainer.classList.add('hidden');
+                btn.innerText = "Show History";
+            }
+        }
+
+        loadDatabase();
+    </script>
+</body>
+</html>

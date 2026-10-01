@@ -1,0 +1,5 @@
+.env
+firebase-key.json
+.venv/
+financial_data.db
+__pycache__/
