@@ -42,36 +42,65 @@ def serve_home_page():
     return FileResponse("index.html")
 
 
-# ADDED: session_id parameter
 @app.get("/analyze/{ticker_symbol}")
 def analyze_and_save_stock(ticker_symbol: str, session_id: str):
     ticker_symbol = ticker_symbol.upper()
     stock = yf.Ticker(ticker_symbol)
     company_info = stock.info
 
-    # Fetch Base Metrics
+    # Fetch Base Metrics (With fallback to fast_info)
     current_price = company_info.get("currentPrice")
+    if current_price is None:
+        try:
+            current_price = stock.fast_info.last_price
+        except Exception:
+            current_price = None
+
     profit_margin = company_info.get("profitMargins")
     formatted_price = f"${current_price:.2f}" if current_price else "N/A"
     formatted_margin = f"{profit_margin:.2%}" if profit_margin else "N/A"
 
-    # Fetch Yearly Metrics (TTM)
-    y_rev = format_currency(company_info.get("totalRevenue"))
+    # Fetch Yearly Metrics (With fallback to income statement)
+    y_rev_raw = company_info.get("totalRevenue")
     y_eps_raw = company_info.get("trailingEps")
-    y_eps = f"${float(y_eps_raw):.2f}" if y_eps_raw else "N/A"
 
-    # Fetch Quarterly Metrics
+    try:
+        if y_rev_raw is None or y_eps_raw is None:
+            income_stmt = stock.income_stmt
+            if not income_stmt.empty:
+                if y_rev_raw is None and "Total Revenue" in income_stmt.index:
+                    y_rev_raw = income_stmt.loc["Total Revenue"].iloc[0]
+                if y_eps_raw is None and "Basic EPS" in income_stmt.index:
+                    y_eps_raw = income_stmt.loc["Basic EPS"].iloc[0]
+    except Exception:
+        pass
+
+    y_rev = format_currency(y_rev_raw)
+
+    if y_eps_raw is not None and str(y_eps_raw).lower() != "nan":
+        y_eps = f"${float(y_eps_raw):.2f}"
+    else:
+        y_eps = "N/A"
+
+    # Fetch Quarterly Metrics (With NaN interception)
     q_rev = "N/A"
     q_eps = "N/A"
     try:
         q_income = stock.quarterly_income_stmt
         if not q_income.empty:
             if "Total Revenue" in q_income.index:
-                q_rev = format_currency(q_income.loc["Total Revenue"].iloc[0])
+                rev_val = q_income.loc["Total Revenue"].iloc[0]
+                if str(rev_val).lower() != "nan":
+                    q_rev = format_currency(rev_val)
+
             if "Basic EPS" in q_income.index:
-                q_eps = f"${float(q_income.loc['Basic EPS'].iloc[0]):.2f}"
+                eps_val = q_income.loc['Basic EPS'].iloc[0]
+                if str(eps_val).lower() != "nan":
+                    q_eps = f"${float(eps_val):.2f}"
             elif "Diluted EPS" in q_income.index:
-                q_eps = f"${float(q_income.loc['Diluted EPS'].iloc[0]):.2f}"
+                eps_val = q_income.loc['Diluted EPS'].iloc[0]
+                if str(eps_val).lower() != "nan":
+                    q_eps = f"${float(eps_val):.2f}"
     except Exception:
         pass
 
@@ -104,7 +133,6 @@ def analyze_and_save_stock(ticker_symbol: str, session_id: str):
             "timestamp": firestore.SERVER_TIMESTAMP,
         }
 
-        # CHANGED: Now saves to sessions/{session_id}/ai_analyses
         db.collection("sessions").document(session_id).collection("ai_analyses").add(new_record)
 
         return {
@@ -126,10 +154,9 @@ def analyze_and_save_stock(ticker_symbol: str, session_id: str):
         }
 
 
-# ADDED: session_id parameter
 @app.get("/database")
 def view_database(session_id: str):
-    # CHANGED: Retrieve documents only from this user's specific session folder
+    # Retrieve documents only from this user's specific session folder
     docs = (
         db.collection("sessions").document(session_id).collection("ai_analyses")
         .order_by("timestamp", direction=firestore.Query.ASCENDING)
@@ -139,7 +166,6 @@ def view_database(session_id: str):
     formatted_rows = []
     for doc in docs:
         data = doc.to_dict()
-        # Formats the document back into the list structure index.html expects
         formatted_rows.append([
             doc.id,
             data.get("ticker", "N/A"),

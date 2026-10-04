@@ -1,6 +1,6 @@
 fastapi
 uvicorn
-yfinance
+yfinance>=0.2.40
 google-genai
 python-dotenv
 firebase-admin
